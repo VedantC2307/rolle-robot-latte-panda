@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<robot name="my_robot_2wd" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find my_2wd_robot)/urdf/2wd_properties.urdf.xacro" />
+  <xacro:include filename="$(find my_2wd_robot)/urdf/robot_parts/base.urdf.xacro" />
+  <!-- <xacro:include filename="$(find my_2wd_robot)/urdf/robot_parts/wheel.urdf.xacro" /> -->
+  <xacro:include filename="$(find my_2wd_robot)/urdf/sensors/lidar.xacro" />
+
+  <xacro:base 
+    length="${base_length}" 
+    width="${base_width}" 
+    height="${base_height}" 
+    mass="${base_mass}"
+/>
+
+  <!-- <xacro:wheel 
+    side="front_left"
+    radius="${wheel_radius}" 
+    width="${wheel_width}" 
+    pos_x="${wheel_front_pos_x}" 
+    pos_y="${wheel_pos_y}" 
+    pos_z="${wheel_pos_z}" 
+    mass="${wheel_mass}"
+  />
+
+  <xacro:wheel 
+    side="front_right"
+    radius="${wheel_radius}" 
+    width="${wheel_width}" 
+    pos_x="${wheel_front_pos_x}" 
+    pos_y="${-wheel_pos_y}" 
+    pos_z="${wheel_pos_z}" 
+    mass="${wheel_mass}"
+  />
+
+  <xacro:wheel 
+    side="rear_left"
+    radius="${wheel_radius}" 
+    width="${wheel_width}" 
+    pos_x="${wheel_rear_pos_x}" 
+    pos_y="${wheel_pos_y}" 
+    pos_z="${wheel_pos_z}" 
+    mass="${wheel_mass}"
+  />
+
+  <xacro:wheel 
+    side="rear_right"
+    radius="${wheel_radius}" 
+    width="${wheel_width}" 
+    pos_x="${wheel_rear_pos_x}" 
+    pos_y="${-wheel_pos_y}" 
+    pos_z="${wheel_pos_z}" 
+    mass="${wheel_mass}"
+  /> -->
+
+
+  <xacro:lidar
+    radius="0.035" 
+    length="0.025" 
+  />
+
+  <!-- <xacro:camera
+    length="0.03"
+  /> -->
+  
+  <!-- <xacro:imu /> -->
+
+</robot>

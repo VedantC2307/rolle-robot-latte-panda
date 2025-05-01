@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" >
+
+    <!-- Camera inertia for box shape -->
+    <xacro:macro name="camera_inertial_box" params="mass x y z *origin">
+        <inertial>
+            <xacro:insert_block name="origin"/>
+            <mass value="${mass}" />
+            <inertia ixx="${(1/12) * mass * (y*y + z*z)}" ixy="0.0" ixz="0.0"
+                    iyy="${(1/12) * mass * (x*x + z*z)}" iyz="0.0"
+                    izz="${(1/12) * mass * (x*x + y*y)}" />
+        </inertial>
+    </xacro:macro>
+
+    <xacro:macro name="camera" params="length">
+    <!-- Camera Stand -->
+    <link name="camera_stand">
+        <visual>
+            <geometry>
+                <box size="0.02 0.02 0.106"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.2 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.02 0.02 0.106"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="0.1"/>
+            <inertia ixx="0.000098" ixy="0" ixz="0" 
+                     iyy="0.000098" iyz="0" 
+                     izz="0.000006"/>
+        </inertial>
+    </link>
+
+    <!-- Camera Stand Joint -->
+    <joint name="camera_stand_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="camera_stand"/>
+        <origin xyz="0.05 0 0.075" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Camera joint -->
+    <joint name="camera_joint" type="fixed">
+        <parent link="camera_stand"/>
+        <child link="camera_frame"/>
+        <origin xyz="0 0 0.073" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Camera Link -->
+    <link name="camera_frame">
+        <visual>
+            <geometry>
+                <box size="0.007 0.075 0.035"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 1.0 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.007 0.075 0.035"/>
+            </geometry>
+        </collision>
+        <xacro:camera_inertial_box mass="0.1" x="0.007" y="0.075" z="0.035">
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </xacro:camera_inertial_box>
+    </link>
+
+    <joint name="camera_optical_joint" type="fixed">
+        <parent link="camera_frame"/>
+        <child link="camera_frame_optical"/>
+        <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+
+    <link name="camera_frame_optical"/>
+
+
+    <!-- Camera gazebo control  -->
+    <gazebo reference="camera_frame">
+        <material>Gazebo/Red</material>
+
+        <!-- Commenting out camera sensor simulation
+        <sensor name="camera" type="camera">
+            <pose> 0 0 0 0 0 0 </pose>
+            <visualize>true</visualize>
+            <update_rate>5</update_rate>
+            <camera>
+                <horizontal_fov>1</horizontal_fov>
+                <image>
+                    <format>R8G8B8</format>
+                    <width>640</width>
+                    <height>480</height>
+                </image>
+                <clip>
+                    <near>0.05</near>
+                    <far>10.0</far>
+                </clip>
+            </camera>
+            <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+                <frame>camera_frame_optical</frame>
+            </plugin>
+        </sensor>
+        -->
+    </gazebo>
+    </xacro:macro>
+
+</robot>

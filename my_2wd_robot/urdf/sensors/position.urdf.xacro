@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:macro name="position_sensor" params="">
+    
+    <!-- Position Sensor Frame -->
+    <link name="position_sensor_frame"> 
+      <visual>
+        <geometry>
+          <sphere radius="0.02"/>
+        </geometry>
+        <material name="red">
+          <color rgba="1.0 0.0 0.0 1.0"/>
+        </material>
+      </visual>
+    </link>
+    
+    <joint name="base_to_position_sensor" type="fixed">
+      <parent link="base_link"/>
+      <child link="position_sensor_frame"/>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+    </joint>
+    
+    
+    
+  </xacro:macro>
+</robot>

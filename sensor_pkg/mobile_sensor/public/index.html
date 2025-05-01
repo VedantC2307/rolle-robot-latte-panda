@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html style="background-color: black; color: white;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>WebXR Pose Data</title>
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        background-color: black;
+        color: white;
+        font-family: Arial, sans-serif;
+      }
+      button {
+        font-size: 24px;
+        padding: 10px;
+        position: fixed;
+        top: 10px;
+        right: 10px;
+      }
+      #pose {
+        margin-top: 80px;
+        text-align: center;
+        font-size: 20px;
+        white-space: pre-wrap;
+      }
+      #overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: black;
+        z-index: -1;  /* Place behind the button and pose text */
+      }
+      .sensor-select {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px;
+        border-radius: 5px;
+      }
+      .sensor-select label {
+        display: block;
+        margin: 5px 0;
+        font-size: 18px;
+      }
+      .sensor-select input[type="checkbox"] {
+        margin-right: 10px;
+        transform: scale(1.5);
+      }
+      #transcription-log {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        max-height: 150px;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 16px;
+        line-height: 1.4;
+      }
+      .log-entry {
+        margin: 5px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        padding-bottom: 5px;
+      }
+      .timestamp {
+        color: #888;
+        font-size: 0.8em;
+        margin-right: 10px;
+      }
+    </style>
+    <script src="textToSpeech.js"></script>
+    <script src="camera.js"></script>
+    <script src="audioManager.js"></script>
+  </head>
+  <body>
+    <div id="overlay"></div>
+    
+    <!-- Add sensor selection checkboxes -->
+    <div class="sensor-select">
+      <label>
+        <input type="checkbox" id="camera-select" checked>
+        Camera Stream
+      </label>
+      <label>
+        <input type="checkbox" id="pose-select" checked>
+        Position Tracking
+      </label>
+      <label>
+        <input type="checkbox" id="audio-select" checked>
+        Microphone
+      </label>
+      <label>
+        <input type="checkbox" id="tts-select" checked>
+        Text to Speech
+      </label>
+    </div>
+
+    <!-- A single Start/Stop button -->
+    <button id="xr-button" disabled>XR not found</button>
+    <!-- Pose data will be printed here on mobile screen -->
+    <div id="pose">Pose data will appear here.</div>
+    <div id="transcription-log"></div>
+
+    <script>
+      let xrSession = null;
+      let xrRefSpace = null;
+      const xrButton = document.getElementById('xr-button');
+      const poseDiv = document.getElementById('pose');
+      let poseWs = null;  // Separate WebSocket for pose data
+      let cameraWs = null;  // Separate WebSocket for camera data
+      let tts = null;
+      let isSessionActive = false;
+      const cameraManager = new CameraManager();
+      const audioManager = new AudioManager();
+      let audioWs = null;
+
+      // Add sensor selection states
+      let enabledSensors = {
+        camera: true,
+        pose: true,
+        audio: true,
+        tts: true
+      };
+
+      // Add checkbox event listeners
+      document.getElementById('camera-select').addEventListener('change', (e) => {
+        enabledSensors.camera = e.target.checked;
+        if (!e.target.checked && cameraInterval) {
+          stopCameraSending();
+        } else if (e.target.checked && isSessionActive) {
+          startCameraSending();
+        }
+      });
+
+      document.getElementById('pose-select').addEventListener('change', (e) => {
+        enabledSensors.pose = e.target.checked;
+        poseDiv.style.display = e.target.checked ? 'block' : 'none';
+      });
+
+      document.getElementById('audio-select').addEventListener('change', (e) => {
+        enabledSensors.audio = e.target.checked;
+        if (!e.target.checked) {
+          audioManager.stopAudio();
+        } else if (isSessionActive) {
+          connectWebSockets();
+        }
+      });
+
+      // Add TTS checkbox listener
+      document.getElementById('tts-select').addEventListener('change', (e) => {
+        enabledSensors.tts = e.target.checked;
+        if (!e.target.checked && tts) {
+          tts.disconnectWebSocket();
+          tts = null;
+        } else if (e.target.checked && isSessionActive) {
+          tts = new TextToSpeech();
+          tts.connectWebSocket();
+        }
+      });
+
+      // Check if immersive-ar session is supported
+      function checkSupported() {
+        if (navigator.xr) {
+          navigator.xr.isSessionSupported('immersive-ar').then(supported => {
+            xrButton.disabled = !supported;
+            xrButton.textContent = supported ? 'Start' : 'XR not found';
+          });
+        } else {
+          xrButton.disabled = true;
+          xrButton.textContent = 'XR not supported';
+        }
+      }
+      checkSupported();
+      navigator.xr && navigator.xr.addEventListener('devicechange', checkSupported);
+
+      // Toggle start/stop when button is clicked
+      xrButton.addEventListener('click', () => {
+        if (!xrSession) {
+          startSession();
+        } else {
+          console.log('Ending XR session...');
+          xrSession.end();
+          // No need to call onSessionEnded here as it's called by the event listener
+        }
+      });
+
+      // Modify connectWebSockets to only connect enabled sensors
+      function connectWebSockets() {
+        if (!isSessionActive) return;
+        
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const baseUrl = `${protocol}//${window.location.host}`;
+        
+        if (enabledSensors.pose) {
+          // Connect pose WebSocket
+          poseWs = new WebSocket(`${baseUrl}/pose`);
+          poseWs.onopen = () => console.log('Pose WebSocket connected');
+          poseWs.onerror = (error) => console.error('Pose WebSocket error:', error);
+          poseWs.onclose = () => {
+            if (isSessionActive) {
+              console.log('Pose WebSocket closed, reconnecting...');
+              setTimeout(() => connectWebSockets(), 1000);
+            }
+          };
+        }
+
+        if (enabledSensors.camera) {
+          // Connect camera WebSocket
+          cameraWs = new WebSocket(`${baseUrl}/camera`);
+          cameraWs.onopen = () => {
+            console.log('Camera WebSocket connected');
+            if (!cameraInterval && isSessionActive) {
+              startCameraSending();
+            }
+          };
+          cameraWs.onerror = (error) => console.error('Camera WebSocket error:', error);
+          cameraWs.onclose = () => {
+            if (isSessionActive) {
+              console.log('Camera WebSocket closed, reconnecting...');
+              setTimeout(() => connectWebSockets(), 1000);
+            }
+          };
+        }
+
+        if (enabledSensors.audio) {
+          audioWs = new WebSocket(`${baseUrl}/audio`);
+          audioWs.onopen = () => {
+            console.log('Audio WebSocket connected');
+            audioManager.startAudio(audioWs, isSessionActive);
+          };
+          audioWs.onerror = (error) => console.error('Audio WebSocket error:', error);
+          audioWs.onclose = () => {
+            if (isSessionActive) {
+              console.log('Audio WebSocket closed, reconnecting...');
+              setTimeout(() => connectWebSockets(), 1000);
+            }
+          };
+        }
+      }
+
+      function startCameraSending() {
+        if (cameraSendingActive) return;
+        
+        cameraSendingActive = true;
+        cameraInterval = setInterval(() => {
+          if (cameraWs && cameraWs.readyState === WebSocket.OPEN) {
+            const cameraFrame = cameraManager.getLastFrame();
+            if (cameraFrame) {
+              cameraWs.send(JSON.stringify({
+                timestamp: Date.now(),
+                camera: cameraFrame,
+                width: cameraManager.width || 640,
+                height: cameraManager.height || 480
+              }));
+            }
+          }
+        }, 25); // 40fps camera stream
+      }
+
+      function stopCameraSending() {
+        cameraSendingActive = false;
+        if (cameraInterval) {
+          clearInterval(cameraInterval);
+          cameraInterval = null;
+        }
+      }
+
+      // Start immersive-ar session without extra UI parts
+      async function startSession() {
+        try {
+          xrSession = await navigator.xr.requestSession('immersive-ar', {
+            requiredFeatures: ['local'],
+            optionalFeatures: ['dom-overlay'],
+            domOverlay: { root: document.body },
+            environmentBlendMode: 'opaque'
+          });
+          xrButton.textContent = 'Stop';
+          xrSession.addEventListener('end', onSessionEnded);
+
+          // Create WebGL context but don't attach canvas to document
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl', { xrCompatible: true });
+          await xrSession.updateRenderState({
+            baseLayer: new XRWebGLLayer(xrSession, gl)
+          });
+
+          xrRefSpace = await xrSession.requestReferenceSpace('local');
+          xrSession.requestAnimationFrame(onXRFrame);
+
+          isSessionActive = true;  // Set flag when starting
+          
+          // Initialize TTS with proper voice loading
+          if (enabledSensors.tts) {
+            tts = new TextToSpeech();
+            await tts.connectWebSocket(); // This now includes voice initialization
+          }
+          
+          connectWebSockets();
+          if (enabledSensors.camera) {
+            cameraManager.startCamera(cameraWs, isSessionActive);
+          }
+
+        } catch (e) {
+          console.error('Failed to start XR session:', e);
+          isSessionActive = false;  // Reset flag if start fails
+          if (tts) {
+            tts.disconnectWebSocket();
+            tts = null;
+          }
+        }
+      }
+
+      // When the session ends, reset button and display
+      function onSessionEnded() {
+        console.log('Session ending: Cleaning up resources...');
+        isSessionActive = false;  // Clear flag first
+        
+        if (poseWs) {
+          console.log('Closing pose WebSocket');
+          poseWs.close();
+          poseWs = null;
+        }
+
+        if (cameraWs) {
+          console.log('Closing camera WebSocket');
+          cameraWs.close();
+          cameraWs = null;
+        }
+
+        if (audioWs) {
+          console.log('Closing audio WebSocket');
+          audioWs.close();
+          audioWs = null;
+        }
+
+        if (tts && enabledSensors.tts) {
+          console.log('Closing TTS system');
+          tts.disconnectWebSocket();
+          tts = null;
+        }
+
+        cameraManager.stopCamera();
+        audioManager.stopAudio();
+        xrSession = null;
+        xrButton.textContent = 'Start';
+        poseDiv.textContent = 'Session ended.';
+        console.log('Cleanup complete');
+      }
+
+      // Modify onXRFrame to only send enabled sensor data
+      function onXRFrame(time, frame) {
+        xrSession.requestAnimationFrame(onXRFrame);
+        const pose = frame.getViewerPose(xrRefSpace);
+        if (pose && enabledSensors.pose) {
+          const pos = pose.transform.position;
+          const o = pose.transform.orientation;
+          const text = `Position: ${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)}
+            Orientation: ${o.x.toFixed(3)}, ${o.y.toFixed(3)}, ${o.z.toFixed(3)}, ${o.w.toFixed(3)}`;
+          // Print on mobile screen
+          poseDiv.textContent = text;
+          
+          // Send pose data via dedicated WebSocket
+          if (poseWs && poseWs.readyState === WebSocket.OPEN) {
+            const poseData = {
+              timestamp: Date.now(),
+              pose: {
+                position: { x: pos.x, y: pos.y, z: pos.z },
+                orientation: { x: o.x, y: o.y, z: o.z, w: o.w }
+              }
+            };
+            poseWs.send(JSON.stringify(poseData));
+          }
+        } else {
+          poseDiv.textContent = 'No pose available.';
+        }
+      }
+    </script>
+  </body>
+</html>

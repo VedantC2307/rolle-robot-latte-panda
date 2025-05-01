@@ -1,0 +1,44 @@
+### ekf config file ###
+ekf_filter_node:
+    ros__parameters:
+        
+        frequency: 40.0
+        two_d_mode: true
+        publish_acceleration: false
+        publish_tf: true
+        smooth_lagged_data: true
+        
+        
+        map_frame: map
+        odom_frame: odom
+        base_link_frame: base_footprint
+        world_frame: odom
+        
+        print_diagnostics: true
+        
+        # Position source (vision)
+        odom0: /rolle/odom
+        odom0_config: [true, true, false,   # Use x,y position
+                      false, false, true,  # Don't use orientation
+                      true, false, false,    # Use x,y velocity
+                      false, false, true,  # Don't use angular velocity
+                      false, false, false]  # Don't use acceleration
+        odom0_queue_size: 15
+        odom0_differential: true  
+        odom0_relative: false
+        odom0_rejection_threshold: 1.0 
+        
+        # Orientation source (IMU)
+        # imu0: /imu/data
+        # imu0_config: [false, false, false,  # Don't use position
+        #              false, false, false,     # Use orientation
+        #              false, false, false,  # Don't use linear velocity
+        #              false, false, false,     # Use angular velocity
+        #              false, false, false]     # Use linear acceleration
+        # imu0_queue_size: 10
+        # imu0_differential: false   
+        # imu0_relative: false
+        # # imu0_pose_rotation_covariance: 0.05
+        # imu0_nodelay: false
+        # imu0_pose_rejection_threshold: 0.8
+

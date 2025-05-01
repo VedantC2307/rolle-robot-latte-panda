@@ -1,0 +1,15 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/vedant/rolle_robot/build/vlm_robot_bridge",
+        "/home/vedant/rolle_robot/install/vlm_robot_bridge/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/vedant/rolle_robot/build/vlm_robot_bridge",
+        "/home/vedant/rolle_robot/install/vlm_robot_bridge/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "idf.pythonInstallPath": "/usr/bin/python3"
+}
